@@ -13,7 +13,7 @@
   html,body{position:fixed;inset:0;overflow:hidden;background:var(--bg1);
     font-family:'Arial Black',Impact,system-ui,sans-serif;color:var(--ink);
     user-select:none;-webkit-user-select:none;touch-action:none;}
-  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;}
   #scan{position:absolute;inset:0;pointer-events:none;z-index:5;opacity:.08;
     background:repeating-linear-gradient(0deg,rgba(0,0,0,.55) 0 1px,transparent 1px 3px);}
   #vig{position:absolute;inset:0;pointer-events:none;z-index:6;
@@ -54,6 +54,13 @@
     padding:5px 11px;opacity:.95;}
   #powerBox{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom));right:14px;font-size:10px;letter-spacing:2px;
     text-align:right;padding:5px 11px;}
+  /* touch dash button — coarse pointers only, shown during play */
+  #dashBtn{position:absolute;right:16px;bottom:calc(58px + env(safe-area-inset-bottom));width:78px;height:78px;
+    border-radius:50%;border:4px solid var(--ink);background:var(--ac2);color:#fff;z-index:12;
+    font-family:inherit;font-weight:900;font-size:14px;letter-spacing:1px;box-shadow:0 6px 0 var(--ink);
+    display:none;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;}
+  #dashBtn.on{display:flex;}
+  #dashBtn.cd{opacity:.4;transform:translateY(3px);box-shadow:0 3px 0 var(--ink);}
 
   /* caption flash */
   #caption{position:absolute;left:0;right:0;top:26%;z-index:9;text-align:center;pointer-events:none;
@@ -194,7 +201,7 @@
   <div id="qname">CRINGE QUEST</div>
   <div id="subtitle">THE HATER STOLE THE LAST LOOP.<br>WALK IT BACK THROUGH 15 LEVELS OF PURE AWKWARD.<br>SMALL LEGS. BIG WALK. ZERO DIGNITY.</div>
   <button class="bigBtn" id="playBtn">START THE WALK</button>
-  <div id="coverHint">PHONE: DRAG TO MOVE &bull; DOUBLE-TAP TO DASH &nbsp;&nbsp; PC: MOUSE / WASD &bull; SPACE DASH</div>
+  <div id="coverHint">PHONE: DRAG TO MOVE &bull; DASH BUTTON / DOUBLE-TAP &nbsp;&nbsp; PC: MOUSE / WASD &bull; SPACE DASH</div>
   <div id="buildTag">A 142 BPM QUEST &bull; ALL SOUNDS MADE OUT OF MATH &bull; ZERO FILES LOADED</div>
 </div>
 
@@ -240,6 +247,8 @@
   </div>
 </div>
 
+<button id="dashBtn">DASH</button>
+
 <script>
 /* ============================================================
    UTIL
@@ -255,7 +264,7 @@ const rr=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h
 
 /* ---------------- canvas ---------------- */
 const cv=document.getElementById('cv');
-const ctx=cv.getContext('2d');
+let ctx=cv.getContext('2d');
 let W=0,H=0,DPR=1;
 function resize(){
   DPR=Math.min(window.devicePixelRatio||1,2);
@@ -797,12 +806,15 @@ function drawFace(who){
   c2.save();c2.translate(44,46);
   const t=performance.now()/300;
   const sq=Math.max(0,Math.sin(t))*.12;
+  /* character draw fns paint on the global ctx — swap it onto the face canvas */
+  const main=ctx;ctx=c2;
   if(who==='goober')drawGoober(0,0,{s:.78,sq,mouth:Math.sin(t*2)>0?.6:0});
   else if(who==='nugget')drawNugget(0,2,{s:.8,sq});
   else if(who==='melty')drawMelty(0,2,{s:.78});
   else if(who==='bao')drawBao(0,4,{s:.82});
   else if(who==='hater')drawHater(0,0,{s:.72,rot:Math.sin(t*.7)*.08});
-  else if(who==='bread'){
+  ctx=main;
+  if(who==='bread'){
     c2.fillStyle='#E8B563';c2.strokeStyle=CUR.ink;c2.lineWidth=4;
     rr(-26,-18,52,38,16);c2.fill();c2.stroke();
     c2.fillStyle='#C98E3B';c2.beginPath();c2.ellipse(0,-6,19,7,0,Math.PI,TAU);c2.fill();
@@ -1464,12 +1476,12 @@ function renderPlay(t){
     ctx.beginPath();ctx.arc(p.x,p.y,p.r+10+Math.sin(t*5)*3,0,TAU);ctx.stroke();
     ctx.globalAlpha=1;
   }
-  /* player (blink during post-hit inv) */
-  if(!(p.inv>0&&Math.floor(t*16)%2===0&&p.shield<=0)){
-    const squash=1+AU.beatPulse*.12;
-    drawGoober(p.x,p.y,{s:1,sq:p.dashT>0?.5:squash*.5,mouth:AU.beatPulse>.5?1:.2,
-      look:Math.atan2(p.faceY||0,p.faceX||1)});
-  }
+  /* player (soft alpha blink during post-hit inv — never fully vanish) */
+  const squash=1+AU.beatPulse*.12;
+  if(p.inv>0&&p.shield<=0)ctx.globalAlpha=.55+.3*Math.sin(t*18);
+  drawGoober(p.x,p.y,{s:1,sq:p.dashT>0?.5:squash*.5,mouth:AU.beatPulse>.5?1:.2,
+    look:Math.atan2(p.faceY||0,p.faceX||1)});
+  ctx.globalAlpha=1;
 }
 function renderHazards(t){
   for(const h of run.haz){
@@ -1661,7 +1673,7 @@ function buildMapNodes(){
 /* ============================================================
    DIALOG
    ============================================================ */
-let dlgLines=[],dlgIdx=0,dlgCB=null,dlgTimer=null,dlgShown='';
+let dlgLines=[],dlgIdx=0,dlgCB=null,dlgTimer=null,dlgShown='',dlgFace=null;
 function openDialog(lines,cb){
   GAME.state='dialog';
   hide('cover');hide('map');hide('ready');
@@ -1672,7 +1684,7 @@ function openDialog(lines,cb){
 function showLine(){
   const ln=dlgLines[dlgIdx];
   document.getElementById('dlgWho').textContent=ln.who;
-  drawFace(ln.face);
+  dlgFace=ln.face;drawFace(ln.face);
   const el=document.getElementById('dlgText');
   el.textContent='';
   dlgShown='';
@@ -1746,6 +1758,28 @@ window.addEventListener('keyup',e=>{
   if(e.code==='ArrowUp'||e.code==='KeyW')KEYS.up=false;
   if(e.code==='ArrowDown'||e.code==='KeyS')KEYS.down=false;
 });
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* touch dash button — only on coarse-pointer (phone) devices */
+const dashBtn=document.getElementById('dashBtn');
+const TOUCH=matchMedia('(pointer:coarse)').matches||'ontouchstart' in window;
+let dashVis=false,dashCdVis=false;
+function syncDash(){
+  const on=TOUCH&&GAME.state==='play'&&!!run&&!run.over;
+  if(on!==dashVis){dashVis=on;dashBtn.classList.toggle('on',on);}
+  const cd=on&&run.p.dashCd>0;
+  if(cd!==dashCdVis){dashCdVis=cd;dashBtn.classList.toggle('cd',cd);}
+}
+dashBtn.addEventListener('pointerdown',e=>{
+  e.preventDefault();e.stopPropagation();
+  if(GAME.state==='play'&&run)tryDash();
+});
+
+/* pause audio when tab/app goes to background, resume on return */
+document.addEventListener('visibilitychange',()=>{
+  if(!AU.ac)return;
+  if(document.hidden)AU.ac.suspend();else AU.ensure();
+});
 
 /* ============================================================
    UI WIRING
@@ -1814,6 +1848,8 @@ function frame(now){
   }else if(GAME.state==='map'){
     mapTime+=raw;renderMap(mapTime);
   }
+  /* idle-animated dialog portrait */
+  if(GAME.state==='dialog'&&dlgFace)drawFace(dlgFace);
 
   ctx.save();
   shake=Math.max(0,shake-raw*60);
@@ -1863,6 +1899,7 @@ function frame(now){
   }
 
   if(GAME.state==='play'&&run)syncHud();
+  syncDash();
 }
 
 /* ---------------- boot ---------------- */
