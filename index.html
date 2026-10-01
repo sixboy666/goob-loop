@@ -61,6 +61,13 @@
     display:none;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;}
   #dashBtn.on{display:flex;}
   #dashBtn.cd{opacity:.4;transform:translateY(3px);box-shadow:0 3px 0 var(--ink);}
+  /* fake notification prank banner */
+  #notif{position:absolute;top:calc(15% + env(safe-area-inset-top));left:50%;
+    transform:translate(-50%,-18px) scale(.9);z-index:14;background:#fff;border:3px solid var(--ink);
+    border-radius:14px;padding:9px 16px;font-size:12px;letter-spacing:1px;color:var(--ink);
+    box-shadow:0 5px 0 rgba(0,0,0,.3);opacity:0;pointer-events:none;white-space:nowrap;
+    transition:.22s cubic-bezier(.2,1.4,.3,1);}
+  #notif.show{opacity:1;transform:translate(-50%,0) scale(1);}
 
   /* caption flash */
   #caption{position:absolute;left:0;right:0;top:26%;z-index:9;text-align:center;pointer-events:none;
@@ -144,12 +151,24 @@
     text-shadow:0 10px 0 var(--ink);animation:cdPop .5s cubic-bezier(.2,1.6,.3,1);}
   @keyframes cdPop{0%{transform:scale(2.1);opacity:0}40%{transform:scale(.92);opacity:1}100%{transform:scale(1)}}
 
-  /* dialog */
-  #dialog{justify-content:flex-end;display:none;padding:0 0 calc(18px + env(safe-area-inset-bottom));z-index:25;
-    background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.35));}
+  /* dialog = cinematic cutscene screen */
+  #dialog{justify-content:flex-end;display:none;padding:0 0 calc(9vh + 14px + env(safe-area-inset-bottom));z-index:25;
+    background:linear-gradient(180deg,rgba(0,0,0,.25) 0%,rgba(0,0,0,.45) 60%,rgba(0,0,0,.5));}
+  #dialog::before,#dialog::after{content:'';position:fixed;left:0;right:0;height:9vh;background:#15120E;
+    pointer-events:none;box-shadow:0 0 24px rgba(0,0,0,.6);}
+  #dialog::before{top:0;}
+  #dialog::after{bottom:0;}
+  #dlgTop{position:absolute;top:calc(9vh + 10px + env(safe-area-inset-top));left:0;right:0;
+    display:flex;justify-content:space-between;align-items:center;padding:0 14px;pointer-events:none;}
+  #dlgTag{font-size:11px;letter-spacing:4px;color:#fff;background:rgba(0,0,0,.4);border-radius:999px;padding:5px 14px;}
+  #skipBtn{pointer-events:auto;border:3px solid var(--ink);background:rgba(255,255,255,.9);color:var(--ink);
+    font-family:inherit;font-weight:900;font-size:11px;letter-spacing:1px;padding:7px 13px;border-radius:999px;
+    cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.35);}
+  #skipBtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.35);}
   #dlgBox{width:min(560px,96vw);background:var(--bg1);border:5px solid var(--ink);border-radius:22px;
     padding:12px 14px 10px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 10px 0 rgba(0,0,0,.35);
-    cursor:pointer;text-align:left;}
+    cursor:pointer;text-align:left;animation:dlgIn .28s cubic-bezier(.2,1.4,.3,1);}
+  @keyframes dlgIn{0%{opacity:0;transform:translateY(26px)}100%{opacity:1;transform:none}}
   #face{width:clamp(64px,18vw,88px);height:clamp(64px,18vw,88px);flex:0 0 clamp(64px,18vw,88px);border:3px solid var(--ink);border-radius:16px;background:rgba(255,255,255,.55);}
   #dlgBody{flex:1;min-width:0;}
   #dlgWho{font-size:clamp(13px,3.6vw,15px);letter-spacing:2px;color:var(--ac2);margin-bottom:4px;}
@@ -222,6 +241,7 @@
 </div>
 
 <div class="overlay" id="dialog">
+  <div id="dlgTop"><span id="dlgTag">STORY TIME</span><button id="skipBtn">SKIP &#9654;&#9654;</button></div>
   <div id="dlgBox">
     <canvas id="face" width="88" height="88"></canvas>
     <div id="dlgBody">
@@ -248,6 +268,7 @@
 </div>
 
 <button id="dashBtn">DASH</button>
+<div id="notif"></div>
 
 <script>
 /* ============================================================
@@ -298,13 +319,14 @@ const AU={
     const AC=window.AudioContext||window.webkitAudioContext;
     this.ac=new AC(); const ac=this.ac;
     this.music=ac.createGain();this.music.gain.value=.9;
+    this.pumpG=ac.createGain();this.pumpG.gain.value=1; /* sidechain pump: ducks on every kick */
     this.lp=ac.createBiquadFilter();this.lp.type='lowpass';this.lp.frequency.value=18000;
     this.sfx=ac.createGain();this.sfx.gain.value=1;
     this.delay=ac.createDelay(1);this.delay.delayTime.value=60/this.BPM/4;
     this.dFb=ac.createGain();this.dFb.gain.value=.22;
     this.dWet=ac.createGain();this.dWet.gain.value=.14;
     const dm=ac.createGain();dm.gain.value=.8;
-    this.music.connect(this.lp);this.lp.connect(dm);
+    this.music.connect(this.pumpG);this.pumpG.connect(this.lp);this.lp.connect(dm);
     this.lp.connect(this.delay);this.delay.connect(this.dFb);this.dFb.connect(this.delay);
     this.delay.connect(this.dWet);this.dWet.connect(dm);
     dm.connect(ac.destination);this.sfx.connect(ac.destination);
@@ -346,6 +368,34 @@ const AU={
     this.breakLoop=1;this.fastDrop=!!fast;return true;
   },
   stepDur(){return 60/this.BPM/4;},
+  /* nearest 16th-grid timestamp at/after audio-now — SFX lock to the loop = card-point feel */
+  qgrid(){
+    if(!this.ac)return null;
+    const sd=this.stepDur()/this.mul,now=this.ac.currentTime;
+    let g=this.nextT;while(g>now)g-=sd;
+    const n=g+Math.round((now-g)/sd)*sd;
+    return Math.max(now+.001,n);
+  },
+  /* sidechain pump: music bus dips on each kick, recovers before the next */
+  pump(t){
+    const g=this.pumpG.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(.58,t);
+    g.linearRampToValueAtTime(1,t+this.stepDur()*3.4);
+  },
+  /* THE HOOK voice: detuned dual saw, snappy, rides the delay for echo-worm effect */
+  lead(t,semi,vol){
+    const ac=this.ac,f=NOTE(semi)*2,g=ac.createGain(),lp=ac.createBiquadFilter();
+    lp.type='lowpass';lp.frequency.setValueAtTime(3400,t);lp.frequency.exponentialRampToValueAtTime(1100,t+.16);
+    g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(vol||.2,t+.008);
+    g.gain.exponentialRampToValueAtTime(.001,t+.17);
+    for(const det of [-.6,.6]){
+      const o=ac.createOscillator();o.type='sawtooth';
+      o.frequency.value=f;o.detune.value=det*7;
+      o.connect(lp);o.start(t);o.stop(t+.2);
+    }
+    lp.connect(g);g.connect(this.music);
+  },
   sched(){
     if(!this.running||this.paused)return;
     const ac=this.ac;
@@ -376,22 +426,31 @@ const AU={
       if(s===15)this.crash(t,.06);
       return;
     }
-    if(s===0){this.kick(t);go(0);}
-    if(s===4){this.kick(t);if(this.tier>=3)this.snare(t);go(0);}
-    if(s===8){/* the hook: total silence */}
-    if(s===10){go(0,true);}
-    if(s===12){this.kick(t);if(this.tier>=3)this.snare(t);this.wub(t);}
-    if(s===15)this.crash(t,.06);
-    if(this.tier>=1&&s%4===2)this.hat(t);
-    if(this.tier>=5){if(s%2===1)this.hat(t,.015);if(s===6)this.goob(t,7);if(s===14){this.kick(t);this.goob(t,12);}}
-    if(this.tier>=2&&[0,2,4,6,8,10,12,14].includes(s)){
-      const line=[-12,-12,-5,-12,-8,-8,-5,-12];
-      this.bass(t,NOTE(line[s/2]));
+    /* === EARTHWORM GRID v2: every hit locked to the 16th grid === */
+    if(s%4===0){this.kick(t);this.pump(t);}          /* four-on-floor + sidechain pump */
+    if(s===4||s===12)this.snare(t);                   /* hard backbeat */
+    if(this.tier>=1&&s%2===0)this.hat(t);
+    if(this.tier>=3&&s%2===1)this.hat(t,.02);
+    /* THE HOOK — identical every bar; repetition is the earworm */
+    const HOOK=[0,null,3,null,5,null,7,5,3,null,0,null,3,0,null,null];
+    const h=HOOK[s];
+    if(h!==null&&h!==undefined){
+      this.lead(t,h,.2);
+      if(this.tier>=4)this.lead(t,h+12,.07);
+      if(this.tier>=5&&s%4===0)this.goob(t,h);
+    }
+    if(s===0)go(0);                                   /* signature: GOOB on the one */
+    if(s===10&&this.tier>=2)go(3,true);               /* HIGH GOOB on the and-of-3 */
+    if(this.tier>=1&&s%2===0){
+      const ROOT=[0,0,0,0,5,5,3,3];
+      this.bass(t,NOTE(-12+ROOT[s/2]));
     }
     if(this.tier>=4&&s%2===0){
       const arp=[12,15,19,24,19,15,17,12][s/2];
       this.blip(t,NOTE(arp));
     }
+    if(this.tier>=5&&s===14){this.kick(t);this.snare(t);}
+    if(s===15)this.crash(t,.06);
     if(this.hype&&s%2===1)this.hat(t,.012);
   },
   kick(t){
@@ -495,7 +554,7 @@ const AU={
   },
   tapBonk(miss){
     if(!this.ac)return;
-    const t=this.ac.currentTime;
+    const t=this.qgrid()||this.ac.currentTime;
     const semi=miss?-7:PENTA[this.bonkIdx++%PENTA.length]+(this.bonkIdx%8<4?12:24);
     const f=NOTE(semi);
     const o=this.ac.createOscillator(),bp=this.ac.createBiquadFilter(),g=this.ac.createGain();
@@ -520,7 +579,7 @@ const AU={
     s.connect(f);f.connect(g);g.connect(this.sfx);s.start(t);s.stop(t+.25);
   },
   powerSfx(kind){
-    if(!this.ac)return;const t=this.ac.currentTime;
+    if(!this.ac)return;const t=this.qgrid()||this.ac.currentTime;
     [0,4,7,12].forEach((semi,i)=>{
       const o=this.ac.createOscillator(),g=this.ac.createGain();
       o.type='triangle';o.frequency.value=NOTE(12+semi+(kind==='crown'?12:0));
@@ -530,7 +589,7 @@ const AU={
     });
   },
   boomSfx(){
-    if(!this.ac)return;const t=this.ac.currentTime;
+    if(!this.ac)return;const t=this.qgrid()||this.ac.currentTime;
     this.kick(t);this.snare(t);this.crash(t,.5);this.wub(t);
     const o=this.ac.createOscillator(),g=this.ac.createGain();
     o.type='sawtooth';o.frequency.setValueAtTime(900,t);o.frequency.exponentialRampToValueAtTime(70,t+.5);
@@ -538,7 +597,7 @@ const AU={
     o.connect(g);g.connect(this.sfx);o.start(t);o.stop(t+.6);
   },
   winSfx(){
-    if(!this.ac)return;const t=this.ac.currentTime;
+    if(!this.ac)return;const t=this.qgrid()||this.ac.currentTime;
     [0,3,5,7,10,12].forEach((semi,i)=>{
       const o=this.ac.createOscillator(),g=this.ac.createGain();
       o.type='square';o.frequency.value=NOTE(12+semi);
@@ -635,11 +694,24 @@ const STORY={
   {who:'GOOBER',face:'goober',t:"...HOW DO I DASH?"},
   {who:'SIR NUGGET',face:'nugget',t:"DOUBLE-TAP. OR MASH SPACE. CONFUSION IS FUEL."}
  ],
+ pre5:[
+  {who:'BAO BAO',face:'bao',t:"WELCOME TO OHIO MALL. THE ESCALATOR SAYS HI."},
+  {who:'GOOBER',face:'goober',t:"THE ESCALATOR... TALKS?"},
+  {who:'BAO BAO',face:'bao',t:"EVERYTHING TALKS HERE. IT'S A MALL."},
+  {who:'THE HATER',face:'hater',t:"ATTENTION SHOPPERS: THE LOOP IS MINE. ALSO, SALE ON SADNESS, AISLE 7."},
+  {who:'GOOBER',face:'goober',t:"I HATE THAT THE SALE IS GOOD."}
+ ],
  post5:[
   {who:'THE HATER',face:'hater',t:"IMPOSSIBLE. WHO WALKS LIKE THAT."},
   {who:'GOOBER',face:'goober',t:"BRO MY LEGS JUST VIBE."},
   {who:'BAO BAO',face:'bao',t:"HE\'S TAKING ME TO THE MALL, GOOBER. THE ESCALATOR NEVER ENDS."},
   {who:'THE HATER',face:'hater',t:"WITNESS ME. I HAVE A WHISTLE."}
+ ],
+ post9:[
+  {who:'THE HATER',face:'hater',t:"I HAVE A WHISTLE AND A BADGE. I AM UNSTOPPABLE."},
+  {who:'GOOBER',face:'goober',t:"YOU'RE ALSO ON THE FLOOR."},
+  {who:'THE HATER',face:'hater',t:"THE FLOOR IS PART OF MY PLAN."},
+  {who:'BAO BAO',face:'bao',t:"TO THE INTERNET. MY COUSIN MELTY LIVES IN THE WIFI."}
  ],
  pre11:[
   {who:'MELTY',face:'melty',t:"COFFEE. DRINK. THE INTERNET AHEAD RUNS ON PEOPLE LIKE HIM."},
@@ -917,7 +989,23 @@ function announce(txt){
   el.textContent=txt;
   el.classList.remove('show');void el.offsetWidth;el.classList.add('show');
 }
-const MILE_WORDS=['SO SIGMA','THE WALK!','UNCALLED FOR','GROSS. AGAIN.','CONFIDENTLY ODD','LEGS OF LEGEND'];
+const MILE_WORDS=['SO SIGMA','THE WALK!','UNCALLED FOR','GROSS. AGAIN.','CONFIDENTLY ODD','LEGS OF LEGEND','ABSOLUTE CINEMA','RIZZ LEVEL: WALK','NO CAP DETECTED','OHIO APPROVES','EMOTIONAL DAMAGE','GOOB MULTIPLIED','CERTIFIED WALKER','THE AUDACITY'];
+
+/* goof events — the prank layer, fires mid-level at random */
+const GOOFS=[
+ {n:'VERSE FLIP. REALITY IS FINE.',f:()=>{const c=document.getElementById('cv');c.style.filter='hue-rotate(150deg) saturate(1.5)';setTimeout(()=>{c.style.filter='';},2600);}},
+ {n:'GIANT GOOB ENERGY',f:()=>{run.giant=5;}},
+ {n:'MELTY WARNED YOU.',f:()=>{fakeNotif('CONGRATULATIONS! (this is a lie)');}},
+ {n:'DROP EVERYTHING.',f:()=>{AU.requestDrop(true);}},
+ {n:'CAMERA OPERATOR ASLEEP.',f:()=>{const c=document.getElementById('cv');c.style.transform='rotate(1.6deg) scale(1.03)';setTimeout(()=>{c.style.transform='';},1900);}}
+];
+function fakeNotif(txt){
+  const el=document.getElementById('notif');
+  el.textContent=txt;el.classList.add('show');
+  if(AU.ac)AU.what(AU.ac.currentTime);
+  clearTimeout(fakeNotif.t);
+  fakeNotif.t=setTimeout(()=>el.classList.remove('show'),2300);
+}
 
 function show(id){document.getElementById(id).style.display='flex';}
 function hide(id){document.getElementById(id).style.display='none';}
@@ -939,12 +1027,9 @@ function startLevel(i){
   const cfg=LEVELS[i];
   CUR=WORLDS[cfg.w];setCss(CUR);
   document.getElementById('hud').style.display='none';
-  /* story gates */
-  if(i===0&&!save.seen){
-    openDialog(STORY.pre1,()=>{save.seen=true;persist();beginReady();});
-    return;
-  }
-  if(i===10){openDialog(STORY.pre11,beginReady);return;}
+  /* story gates — every world opens with a cutscene, every boss ends with one (skippable) */
+  const pre={0:STORY.pre1,5:STORY.pre5,10:STORY.pre11}[i];
+  if(pre){openDialog(pre,beginReady);return;}
   beginReady();
 }
 function makeRun(cfg){
@@ -953,7 +1038,7 @@ function makeRun(cfg){
     p:{x:W/2,y:H*0.78,r:20,vx:0,vy:0,faceX:0,faceY:-1,inv:1,dashCd:0,dashT:0,charges:1,maxCharges:1,
        slow:0,magnet:0,shield:0,trail:[]},
     notes:[],haz:[],props:[],
-    hearts:3,combo:0,
+    hearts:3,combo:0,giant:0,goofT:rand(11,16),
     portal:{x:W*0.5,y:H*0.3,open:false},
     boss:cfg.extra.boss?{x:W/2,y:H*0.22,hp:3,state:'dance',stateT:0,phase:0,t:0,dizzy:0,vx:0}:null,
     over:false
@@ -1034,7 +1119,7 @@ function endPlay(win){
     rewardBox.textContent=REWARDS[cfg.i];
     nextBtn.style.display=(cfg.i<14)?'block':'none';
     buildMapNodes();
-    const post=cfg.i===4?STORY.post5:(cfg.i===14?STORY.post15:null);
+    const post=cfg.i===4?STORY.post5:(cfg.i===9?STORY.post9:(cfg.i===14?STORY.post15:null));
     show('result');
     if(post){
       /* story plays first, card waits behind it */
@@ -1269,6 +1354,13 @@ function updatePlay(dt){
       run.nextSpawn=run.beat+rand(cfg.cad[0],cfg.cad[1]);
     }
     if(cfg.props&&run.beat>0&&run.beat%14===0&&run.props.length===0)spawnProp();
+    /* goof director — the prank layer */
+    run.goofT-=dt;
+    if(run.giant>0)run.giant-=dt;
+    if(run.goofT<=0&&!run.portal.open){
+      run.goofT=rand(13,20);
+      const g=pick(GOOFS);g.f();announce(g.n);
+    }
     /* portal */
     if(!run.portal.open&&GAME.got>=cfg.quota){
       run.portal.open=true;
@@ -1479,7 +1571,7 @@ function renderPlay(t){
   /* player (soft alpha blink during post-hit inv — never fully vanish) */
   const squash=1+AU.beatPulse*.12;
   if(p.inv>0&&p.shield<=0)ctx.globalAlpha=.55+.3*Math.sin(t*18);
-  drawGoober(p.x,p.y,{s:1,sq:p.dashT>0?.5:squash*.5,mouth:AU.beatPulse>.5?1:.2,
+  drawGoober(p.x,p.y,{s:run.giant>0?1.55:1,sq:p.dashT>0?.5:squash*.5,mouth:AU.beatPulse>.5?1:.2,
     look:Math.atan2(p.faceY||0,p.faceX||1)});
   ctx.globalAlpha=1;
 }
@@ -1676,11 +1768,23 @@ function buildMapNodes(){
 let dlgLines=[],dlgIdx=0,dlgCB=null,dlgTimer=null,dlgShown='',dlgFace=null;
 function openDialog(lines,cb){
   GAME.state='dialog';
-  hide('cover');hide('map');hide('ready');
+  hide('cover');hide('map');hide('ready'); /* note: never hide 'result' — post-boss story plays above the card */
   dlgLines=lines;dlgIdx=0;dlgCB=cb||null;
   show('dialog');
   showLine();
 }
+function endDialog(){
+  clearInterval(dlgTimer);
+  hide('dialog');
+  dlgFace=null;
+  const cb=dlgCB;dlgCB=null;
+  if(cb)cb();
+}
+document.getElementById('skipBtn').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(GAME.state!=='dialog')return;
+  endDialog();
+});
 function showLine(){
   const ln=dlgLines[dlgIdx];
   document.getElementById('dlgWho').textContent=ln.who;
@@ -1707,9 +1811,7 @@ document.getElementById('dlgBox').addEventListener('click',()=>{
   }
   dlgIdx++;
   if(dlgIdx>=dlgLines.length){
-    hide('dialog');
-    const cb=dlgCB;dlgCB=null;
-    if(cb)cb();
+    endDialog();
   }else showLine();
 });
 
