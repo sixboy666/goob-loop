@@ -396,12 +396,27 @@ const AU={
     }
     lp.connect(g);g.connect(this.music);
   },
+  /* sub drone: one bar long, breathes with the sidechain pump — the hypno-floor */
+  drone(t,semi){
+    const ac=this.ac,dur=this.stepDur()*16,g=ac.createGain();
+    g.gain.setValueAtTime(.0001,t);
+    g.gain.linearRampToValueAtTime(.15,t+.12);
+    g.gain.setValueAtTime(.15,t+dur-.18);
+    g.gain.linearRampToValueAtTime(.0001,t+dur);
+    for(const [tp,fv] of [['sine',1],['triangle',1.005]]){
+      const o=ac.createOscillator();o.type=tp;
+      o.frequency.value=NOTE(semi-12)*fv;
+      o.connect(g);o.start(t);o.stop(t+dur+.05);
+    }
+    g.connect(this.music);
+  },
   sched(){
     if(!this.running||this.paused)return;
     const ac=this.ac;
     while(this.nextT<ac.currentTime+.16){
       this.runStep(this.step,this.nextT);
       this.nextT+=this.stepDur()/this.mul;
+      this.stepCount=(this.stepCount||0)+1;
       this.step=(this.step+1)%16;
       if(this.step===0){
         if(this.breakLoop>0)this.breakLoop--;
@@ -426,22 +441,30 @@ const AU={
       if(s===15)this.crash(t,.06);
       return;
     }
-    /* === EARTHWORM GRID v2: every hit locked to the 16th grid === */
-    if(s%4===0){this.kick(t);this.pump(t);}          /* four-on-floor + sidechain pump */
-    if(s===4||s===12)this.snare(t);                   /* hard backbeat */
-    if(this.tier>=1&&s%2===0)this.hat(t);
-    if(this.tier>=3&&s%2===1)this.hat(t,.02);
+    /* === EARTHWORM GRID v3: 4-bar breathing phrase — bar 4 drops drums, hook+drone remain === */
+    const bar=Math.floor((this.stepCount||0)/16)%4;
+    const breathe=bar===3&&this.tier>=2;
+    if(breathe){
+      if(s===0){this.kick(t);this.pump(t);}      /* single anchor kick per breath bar */
+    }else{
+      if(s%4===0){this.kick(t);this.pump(t);}    /* four-on-floor + sidechain pump */
+      if(s===4||s===12)this.snare(t);            /* hard backbeat */
+      if(this.tier>=1&&s%2===0)this.hat(t);
+      if(this.tier>=3&&s%2===1)this.hat(t,.02);
+      if(this.tier>=2&&(s===2||s===6||s===10||s===14))this.hat(t,.008); /* shaker 16ths */
+    }
+    if(s===0)this.drone(t,0);
     /* THE HOOK — identical every bar; repetition is the earworm */
     const HOOK=[0,null,3,null,5,null,7,5,3,null,0,null,3,0,null,null];
     const h=HOOK[s];
     if(h!==null&&h!==undefined){
       this.lead(t,h,.2);
       if(this.tier>=4)this.lead(t,h+12,.07);
-      if(this.tier>=5&&s%4===0)this.goob(t,h);
+      if(this.tier>=5&&(s%4===0||s===6))this.goob(t,h);
     }
     if(s===0)go(0);                                   /* signature: GOOB on the one */
     if(s===10&&this.tier>=2)go(3,true);               /* HIGH GOOB on the and-of-3 */
-    if(this.tier>=1&&s%2===0){
+    if(this.tier>=1&&s%2===0&&(breathe?s===0||s===8:true)){
       const ROOT=[0,0,0,0,5,5,3,3];
       this.bass(t,NOTE(-12+ROOT[s/2]));
     }
@@ -1519,14 +1542,41 @@ function drawWorldDecor(t){
     for(let y=-80+off;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
   }
 }
+function shadow(x,y,r,a){
+  ctx.fillStyle='rgba(0,0,0,'+a+')';
+  ctx.beginPath();ctx.ellipse(x,y+r*.95,r*.82,r*.2,0,0,TAU);ctx.fill();
+}
 function renderPlay(t){
   drawWorldDecor(t);
   const p=run.p;
+  /* perspective floor grid, parallax against the player */
+  const horizon=H*.46,pxo=(p.x/W-.5),pyo=(p.y/H-.5);
+  ctx.strokeStyle=CUR.ink;ctx.lineWidth=1.5;
+  for(let i=0;i<6;i++){
+    const gy=horizon+8+i*i*13+pyo*14;
+    ctx.globalAlpha=.05+i*.035;
+    ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();
+  }
+  ctx.globalAlpha=.09;
+  for(let i=0;i<=8;i++){
+    const x0=W*i/8;
+    ctx.beginPath();
+    ctx.moveTo(W/2+(x0-W/2)*.22+pxo*26,horizon+8);
+    ctx.lineTo(x0+pxo*46,H);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
   /* portal under everything */
   drawPortal(run.portal.x,run.portal.y,t,run.portal.open);
+  if(run.portal.open){
+    ctx.save();ctx.translate(run.portal.x,run.portal.y);ctx.rotate(-t*1.2);
+    ctx.setLineDash([10,12]);ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,0,34+AU.beatPulse*5,0,TAU);ctx.stroke();
+    ctx.restore();ctx.setLineDash([]);
+  }
   /* boss */
   const b=run.boss;
   if(b){
+    shadow(b.x,b.y,46,.28);
     /* hp pips */
     for(let i=0;i<3;i++){
       ctx.fillStyle=i<b.hp?'#FFD23F':'rgba(0,0,0,.3)';
@@ -1568,6 +1618,26 @@ function renderPlay(t){
     ctx.beginPath();ctx.arc(p.x,p.y,p.r+10+Math.sin(t*5)*3,0,TAU);ctx.stroke();
     ctx.globalAlpha=1;
   }
+  /* dash speedlines */
+  if(p.dashT>0){
+    ctx.strokeStyle='#FFFFFF';ctx.lineWidth=2;
+    for(let i=0;i<6;i++){
+      const a=(i/6)*TAU+t*9,r1=p.r+9+((i*37)%10),r2=r1+15+((i*23)%17);
+      ctx.globalAlpha=.2+((i*13)%5)*.07;
+      ctx.beginPath();ctx.moveTo(p.x+Math.cos(a)*r1,p.y+Math.sin(a)*r1);
+      ctx.lineTo(p.x+Math.cos(a)*r2,p.y+Math.sin(a)*r2);ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+  /* combo halo — rotating dashed ring, pumps on the beat */
+  if(run.combo>=3){
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(t*1.6);
+    ctx.setLineDash([8,10]);ctx.lineWidth=2.5;
+    ctx.strokeStyle=CUR.ac2;ctx.globalAlpha=.4+AU.beatPulse*.35;
+    ctx.beginPath();ctx.arc(0,0,p.r+18+Math.min(run.combo,20)*.8+AU.beatPulse*5,0,TAU);ctx.stroke();
+    ctx.restore();ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+  shadow(p.x,p.y,p.r,.22);
   /* player (soft alpha blink during post-hit inv — never fully vanish) */
   const squash=1+AU.beatPulse*.12;
   if(p.inv>0&&p.shield<=0)ctx.globalAlpha=.55+.3*Math.sin(t*18);
