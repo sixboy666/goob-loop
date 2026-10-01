@@ -1,13 +1,13 @@
-﻿# GOOB LOOP
+﻿# GOOB LOOP: CRINGE QUEST
 
-A music-first brainrot meme game. Not a game with a funny song in it - the entire game was designed BACKWARDS around one original 142 BPM loop: GOOB... GOOB... silence... HIGH GOOB... WUB. Three listens and it lives in your head.
+A music-first brainrot quest built BACKWARDS around one original 142 BPM Web Audio loop. THE HATER stole the last loop - walk it back through 15 levels of pure awkward.
 
-- 100% single-file HTML5, zero dependencies, zero loaded files - every sound is synthesized with Web Audio
-- Phone (tap / drag) and desktop (mouse + space / arrows)
-- Five scenes, five palettes: GOOB BONK, NUGGET RUN, MELTDOWN, BAO DROP, LOAF MOON
-- Taps layer drums, bass and arps into the loop with your combo; misses duck the song and trigger "WHAT."
-- Beat-synced random chaos: giant mode, clones, intruders, half-time, freeze frames, hue flips
-- 10-30 second rounds, meme grade on the result card, instant replay
+- 100% single-file HTML5, zero dependencies, zero loaded files - every sound is synthesized live with Web Audio
+- 3 worlds x 5 levels: THE BLOCK, OHIO MALL, THE ALGORITHM - plus a boss fight against THE HATER closing each world
+- Beat-driven dodging: grab notes ON the beat for bonus cringe, dash through hazards, chain combos
+- Absurd power-ups: SIGMA SHADES, GOD SLIPPERS, PLASTIC CROWN, THE FAN OF JUDGMENT
+- Cringe rewards, embarrassing titles and story dialogs after every clear; progress saved locally
+- Phone (drag to move, double-tap to dash) and desktop (mouse / WASD + space dash)
 
 ## Play
 - Online: https://sixboy666.github.io/goob-loop/
