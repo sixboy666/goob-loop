@@ -195,6 +195,48 @@
     border-radius:16px;padding:10px;cursor:pointer;box-shadow:0 5px 0 var(--ink);color:#fff;background:var(--ac2);}
   .cardBtn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink);}
   .cardBtn.alt{background:transparent;color:var(--ink);font-size:14px;box-shadow:0 3px 0 rgba(58,46,28,.5);}
+
+  /* ============================================================
+     v4 DYNAMIC UI LAYER — presentation only
+     ============================================================ */
+  :root{--beat:0;}
+  /* shine sweep across primary buttons */
+  .bigBtn,.cardBtn{position:relative;overflow:hidden;isolation:isolate;}
+  .bigBtn::after,.cardBtn::after{content:'';position:absolute;top:-60%;left:-30%;width:30%;height:220%;z-index:-1;
+    background:linear-gradient(105deg,transparent,rgba(255,255,255,.6),transparent);
+    transform:translateX(-180%) rotate(8deg);animation:shine 3.6s ease-in-out infinite;pointer-events:none;}
+  .cardBtn::after{animation-duration:5.2s;}
+  @keyframes shine{0%,52%{transform:translateX(-180%) rotate(8deg)}78%,100%{transform:translateX(620%) rotate(8deg)}}
+  /* reactive HUD */
+  #hearts.hit{animation:heartHit .38s ease;}
+  @keyframes heartHit{0%{transform:scale(1)}35%{transform:scale(1.45) rotate(-10deg);color:var(--ac2)}100%{transform:scale(1)}}
+  #noteBox.pop{animation:notePop .32s ease;}
+  @keyframes notePop{0%{}40%{transform:translateX(-50%) scale(1.22)}100%{transform:translateX(-50%) scale(1)}}
+  #notes{transition:transform .06s;transform:scale(calc(1 + var(--beat)*.07));}
+  /* living map nodes */
+  .node.open{animation:nodeBob 2.1s ease-in-out infinite;}
+  .node:nth-child(even).open{animation-delay:.55s;}
+  @keyframes nodeBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .node.next{animation:nextPulse 1.15s ease-in-out infinite;}
+  @keyframes nextPulse{0%,100%{transform:scale(1);box-shadow:0 6px 0 rgba(0,0,0,.3)}
+    50%{transform:scale(1.14);box-shadow:0 6px 0 rgba(0,0,0,.3),0 0 22px var(--ac2)}}
+  /* dramatic countdown finale */
+  #rdBig.go{color:var(--ac2);}
+  /* result card theatrics */
+  #grade{display:inline-block;}
+  #grade.stamp{animation:stampIn .5s cubic-bezier(.2,1.7,.3,1) both;}
+  @keyframes stampIn{0%{transform:scale(2.6) rotate(-14deg);opacity:0}
+    60%{transform:scale(.94) rotate(3deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+  #cringeBar{transition:width 1.05s cubic-bezier(.2,.85,.3,1);
+    background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 15px,transparent 15px 30px),
+      linear-gradient(90deg,var(--ac),var(--ac2));background-size:30px 30px,100% 100%;
+    animation:barStripe .7s linear infinite;}
+  @keyframes barStripe{to{background-position:30px 0,30px 0}}
+  /* cover title life */
+  #title{animation:titleFloat 3.2s ease-in-out infinite;}
+  @keyframes titleFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-9px) rotate(1deg)}}
+  #qname{animation:qPulse 1.7s ease-in-out infinite;}
+  @keyframes qPulse{0%,100%{letter-spacing:6px}50%{letter-spacing:9px}}
 </style>
 </head>
 <body>
@@ -1060,7 +1102,7 @@ function makeRun(cfg){
     cfg,t:0,beat:-1,nextSpawn:2,noteTimer:1,propTimer:10,
     p:{x:W/2,y:H*0.78,r:20,vx:0,vy:0,faceX:0,faceY:-1,inv:1,dashCd:0,dashT:0,charges:1,maxCharges:1,
        slow:0,magnet:0,shield:0,trail:[]},
-    notes:[],haz:[],props:[],
+    notes:[],haz:[],props:[],amb:[],ambT:0,
     hearts:3,combo:0,giant:0,goofT:rand(11,16),
     portal:{x:W*0.5,y:H*0.3,open:false},
     boss:cfg.extra.boss?{x:W/2,y:H*0.22,hp:3,state:'dance',stateT:0,phase:0,t:0,dizzy:0,vx:0}:null,
@@ -1083,6 +1125,7 @@ function beginReady(){
   const tick=()=>{
     if(GAME.state!=='ready')return;
     big.textContent=seq[k];
+    big.classList.toggle('go',seq[k]==='GOOB!');
     big.style.animation='none';void big.offsetWidth;big.style.animation='';
     if(AU.ac)AU.tapBonk(false);
     k++;
@@ -1098,6 +1141,7 @@ function beginPlay(){
   AU.start();AU.setTier(0);
   GAME.state='play';GAME.hits=0;GAME.got=0;GAME.onBeats=0;GAME.t0=performance.now();
   run=makeRun(cfg);
+  prevHearts=run.hearts;prevGot=0;
   announce(cfg.extra.boss?'THE HATER APPROACHES':'GOOB!');
 }
 function endPlay(win){
@@ -1133,9 +1177,11 @@ function endPlay(win){
     save.unlocked=Math.max(save.unlocked,Math.min(15,cfg.i+1));
     persist();
     head.textContent='LEVEL CLEAR, SOMEHOW';
-    document.getElementById('grade').textContent=rk.rank+' \u00B7 '+rk.name+(isBest?'  NEW!':'');
-    document.getElementById('cringeBar').style.width=pct+'%';
-    document.getElementById('cringePct').textContent='CRINGE '+pct+'%  \u00B7  AVG '+avgCringe()+'%';
+    const gradeEl=document.getElementById('grade');
+    gradeEl.textContent=rk.rank+' \u00B7 '+rk.name+(isBest?'  NEW!':'');
+    gradeEl.classList.remove('stamp');void gradeEl.offsetWidth;gradeEl.classList.add('stamp');
+    const bar=document.getElementById('cringeBar'),pctEl=document.getElementById('cringePct');
+    bar.style.width='0%';
     document.getElementById('onBeatLine').innerHTML='ON-BAT WALKS: <b>'+Math.round(beatRatio*100)+'%</b>  &nbsp; TIME: <b>'+elapsed.toFixed(1)+'s</b>';
     const tNow=titleFor(avgCringe(),!!save.best[14]);
     titleLine.innerHTML='CURRENT TITLE: <b>'+tNow+'</b>';
@@ -1143,18 +1189,28 @@ function endPlay(win){
     nextBtn.style.display=(cfg.i<14)?'block':'none';
     buildMapNodes();
     const post=cfg.i===4?STORY.post5:(cfg.i===9?STORY.post9:(cfg.i===14?STORY.post15:null));
+    const rollPct=()=>{ /* count-up + bar fill once the card is actually visible */
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{bar.style.width=pct+'%';}));
+      const t0=performance.now();
+      const roll=()=>{const k=Math.min(1,(performance.now()-t0)/900);
+        pctEl.textContent='CRINGE '+Math.round(pct*k)+'%  \u00B7  AVG '+avgCringe()+'%';
+        if(k<1)requestAnimationFrame(roll);};
+      requestAnimationFrame(roll);
+    };
     show('result');
     if(post){
       /* story plays first, card waits behind it */
       card.style.visibility='hidden';
-      openDialog(post,()=>{card.style.visibility='visible';GAME.state='result';});
+      openDialog(post,()=>{card.style.visibility='visible';GAME.state='result';rollPct();});
     }else{
-      card.style.visibility='visible';
+      card.style.visibility='visible';rollPct();
     }
   }else{
     AU.choke();
     head.textContent='THE WALK WAS TOO MUCH';
-    document.getElementById('grade').textContent='F \u00B7 CLIPPED A TOE';
+    const gradeEl=document.getElementById('grade');
+    gradeEl.textContent='F \u00B7 CLIPPED A TOE';
+    gradeEl.classList.remove('stamp');void gradeEl.offsetWidth;gradeEl.classList.add('stamp');
     document.getElementById('cringeBar').style.width='0%';
     document.getElementById('cringePct').textContent='CRINGE 0%  \u00B7 THE LOOP CONTINUES WITHOUT YOU';
     document.getElementById('onBeatLine').textContent='RETRY. THE GROUND BELIEVES IN YOU.';
@@ -1368,6 +1424,17 @@ function updatePlay(dt){
     }
   }
 
+  /* ambient drifting motes — pure atmosphere */
+  run.ambT-=dt;
+  if(run.ambT<=0){
+    run.ambT=rand(.22,.5);
+    run.amb.push({x:rand(0,W),y:H+8,vy:rand(16,42),r:rand(1.4,3.6),a:rand(.05,.15),sw:rand(-10,10),ph:rand(0,TAU)});
+  }
+  for(let i=run.amb.length-1;i>=0;i--){
+    const q=run.amb[i];q.y-=q.vy*dt;q.x+=Math.sin(run.t+q.ph)*q.sw*dt;
+    if(q.y<-10)run.amb.splice(i,1);
+  }
+
   /* director */
   if(!b){
     run.noteTimer-=dt;
@@ -1565,6 +1632,12 @@ function renderPlay(t){
     ctx.lineTo(x0+pxo*46,H);ctx.stroke();
   }
   ctx.globalAlpha=1;
+  /* ambient motes */
+  for(const q of run.amb){
+    ctx.globalAlpha=q.a;ctx.fillStyle='#ffffff';
+    ctx.beginPath();ctx.arc(q.x,q.y,q.r,0,TAU);ctx.fill();
+  }
+  ctx.globalAlpha=1;
   /* portal under everything */
   drawPortal(run.portal.x,run.portal.y,t,run.portal.open);
   if(run.portal.open){
@@ -1717,17 +1790,29 @@ function renderHazards(t){
     }
   }
 }
+let prevHearts=-1,prevGot=-1;
 function syncHud(){
   if(!run)return;
   document.getElementById('noteBox').classList.toggle('boss',!!run.boss);
   document.getElementById('hud').classList.toggle('boss',!!run.boss);
-  document.getElementById('hearts').textContent='♥'.repeat(run.hearts)+'♡'.repeat(Math.max(0,(run.boss?5:3)-run.hearts));
+  const hEl=document.getElementById('hearts');
+  if(run.hearts!==prevHearts){
+    prevHearts=run.hearts;
+    hEl.classList.remove('hit');void hEl.offsetWidth;hEl.classList.add('hit');
+  }
+  hEl.textContent='♥'.repeat(run.hearts)+'♡'.repeat(Math.max(0,(run.boss?5:3)-run.hearts));
   if(run.boss){
     document.getElementById('notes').textContent='TAP WHEN DAZED';
     document.getElementById('objLine').textContent='HATER HP '+Math.max(0,run.boss.hp)+'/3';
   }else{
-    document.getElementById('notes').textContent='\u266A '+Math.min(GAME.got,run.cfg.quota)+' / '+run.cfg.quota;
+    const gotShow=Math.min(GAME.got,run.cfg.quota);
+    document.getElementById('notes').textContent='\u266A '+gotShow+' / '+run.cfg.quota;
     document.getElementById('objLine').textContent=run.portal.open?'GET TO THE EXIT':'COLLECT ON THE BEAT';
+    if(gotShow!==prevGot){
+      prevGot=gotShow;
+      const nb=document.getElementById('noteBox');
+      nb.classList.remove('pop');void nb.offsetWidth;nb.classList.add('pop');
+    }
   }
   document.getElementById('dashBox').textContent='DASH '+(run.p.charges?'READY':'...');
   const pw=[];
@@ -1742,6 +1827,17 @@ function syncHud(){
    COVER / MAP RENDER
    ============================================================ */
 function renderCover(t){
+  /* floating music motes rising behind the title */
+  ctx.textAlign='center';ctx.font='900 20px Impact';
+  for(let i=0;i<12;i++){
+    const sp=16+(i%4)*7;
+    const x=((i*127+41)%W+t*sp)%W-(i%2?30:0);
+    const y=H+24-((t*sp*1.4+i*83)%(H*.72));
+    ctx.globalAlpha=.10+.06*Math.abs(Math.sin(t*1.3+i));
+    ctx.fillStyle=i%2?'#fff':CUR.ac2;
+    ctx.fillText(i%3?'\u266A':'\u266B',x,y);
+  }
+  ctx.globalAlpha=1;
   const types=['goober','nugget','melty','bao','bread'];
   for(let i=0;i<types.length;i++){
     const x=34+(W-68)*(i+.5)/5,y=H*.86+Math.abs(Math.sin(t*4+i*.8))*-20;
@@ -1816,6 +1912,7 @@ function buildMapNodes(){
     if(locked)b.classList.add('locked');
     else if(save.best[i]!==undefined)b.classList.add('done');
     else b.classList.add('open');
+    if(i===save.unlocked)b.classList.add('next'); /* the one to play gets a heartbeat ring */
     if(cfg.extra.boss)b.classList.add('boss');
     b.style.left=NODE_POS[i][0]+'%';
     b.style.top=NODE_POS[i][1]+'%';
@@ -2006,6 +2103,7 @@ function frame(now){
   }
   AU.beatPulse=Math.max(0,AU.beatPulse-raw*5.5);
   AU.dropPulse=Math.max(0,AU.dropPulse-raw*3.2);
+  document.documentElement.style.setProperty('--beat',AU.beatPulse.toFixed(3));
 
   /* bg */
   const g=ctx.createLinearGradient(0,0,0,H);
